@@ -72,3 +72,92 @@ flowchart LR
   RAG --> LLM[Ollama chat]
   KB[(context/*.md)] --> RAG
 ```
+
+Indexing happens once at startup. Each chat turn only searches that index, then asks the model to phrase an answer from the hits.
+
+```mermaid
+flowchart TB
+  subgraph startup [Startup]
+    MD[context/*.md] --> CH[Chunk markdown]
+    CH --> EM[all-MiniLM-L6-v2]
+    EM --> MEM[(In-memory vectors)]
+  end
+  subgraph turn [Each chat]
+    Q[User message] --> IN[Length and injection check]
+    IN --> COS[Cosine search]
+    MEM --> COS
+    COS --> PR[System prompt plus chunks]
+    PR --> OL[Ollama llama3.2]
+    OL --> OUT[Output redaction]
+    OUT --> ANS[Reply and sources]
+  end
+```
+
+## Why this, not that
+
+Goal: simple, free, trustworthy, with RAG, embeddings, and guardrails.
+
+### React UI
+
+**Chosen:** React + Vite  
+**Over:** Next.js, Vue, plain HTML/JS
+
+React is familiar, Vite is fast to run locally, and a chat UI doesn’t need SSR, routing, or a full framework. Next.js would add complexity with little benefit for a demo API-backed chat.
+
+### FastAPI
+
+**Chosen:** FastAPI  
+**Over:** Flask, Django, Express-only backend
+
+FastAPI gives async (good for calling Ollama over HTTP), automatic OpenAPI docs, and Pydantic validation with little boilerplate. Flask is fine but more manual; Django is heavier than needed for two endpoints.
+
+### Guardrails (custom, lightweight)
+
+**Chosen:** Length limits, regex for injection-ish input, scoped system prompt, light output redaction  
+**Over:** NeMo Guardrails, Llama Guard, OpenAI Moderation API, full policy engines
+
+Those tools are stronger but add dependencies, config, and often another model or paid API. For a small support bot on a fixed knowledge base, rules plus a strict system prompt get most of the value without a second LLM call.
+
+### RAG retrieve (in-process, cosine similarity)
+
+**Chosen:** Chunk markdown, then sentence-transformers embeddings, then in-memory cosine search  
+**Over:** Pinecone, Weaviate, Chroma, LangChain, hosted embedding APIs
+
+Local embeddings and a numpy dot product work fine for one small `context/*.md` file. A vector database shines at large scale and frequent updates; it’s extra moving parts for a toy knowledge base. Skipping LangChain keeps the pipeline readable in a few files (`rag.py`, `main.py`).
+
+### Embeddings: all-MiniLM-L6-v2
+
+**Chosen:** Small local Sentence Transformer  
+**Over:** OpenAI `text-embedding-3-*`, larger models like `e5-large`
+
+Free, runs offline, small download, fast on CPU — enough for short support docs. Cloud embeddings need keys, cost, and network. Bigger local models are slower for minimal gain on a tiny corpus.
+
+### Knowledge base: markdown in `backend/context/`
+
+**Chosen:** Plain `.md` on disk  
+**Over:** PDF crawl, Confluence, SQL, S3 pipelines
+
+Markdown is easy to edit, diff, and version. It matches “easy context” for a demo. Production often needs connectors; that’s intentionally out of scope here.
+
+### Ollama (local llama3.2)
+
+**Chosen:** Ollama on your machine  
+**Over:** OpenAI, Anthropic, Groq, Hugging Face Inference, running raw llama.cpp yourself
+
+Free and no API key for local dev; Ollama handles model pull, serving, and the chat API. Hosted APIs are simpler to operate but cost money and send data off-box. Raw llama.cpp is more DIY than `ollama pull` plus HTTP chat.
+
+### LLM role vs RAG role
+
+**Chosen:** RAG for facts, LLM for fluent answers constrained by context  
+**Over:** LLM-only (no RAG), or retrieval-only templates with no LLM
+
+LLM-only drifts and invents prices and policies. Template-only answers feel brittle. RAG plus an “answer only from context” prompt is the usual small-team pattern: retrieval grounds, the LLM phrases.
+
+### What we’d swap first if requirements changed
+
+| If you need… | Likely change |
+| --- | --- |
+| Bigger docs / many files | Chroma or a similar vector store |
+| Stronger safety / categories | A moderation model or a guardrails framework |
+| No local GPU/RAM for the LLM | Groq or OpenAI behind an env-based `llm.py` adapter |
+| Production auth, rate limits | API gateway or middleware in FastAPI, not a UI-only sketch |
