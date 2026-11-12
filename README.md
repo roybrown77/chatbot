@@ -53,6 +53,54 @@ To point at another API host:
 VITE_API_URL=http://127.0.0.1:8000 npm run dev
 ```
 
+## Prompts to try
+
+The bot is scoped to Acme Widgets support. It pulls answers from `backend/context/knowledge.md`, so questions that match that doc work best.
+
+### Products and pricing
+
+- “What’s the difference between Widget Mini and Widget Pro?”
+- “How much is Widget Max and what colors does it come in?”
+- “Does Widget Pro include a phone stand?”
+
+### Shipping
+
+- “Do I get free shipping on a $49 Widget Pro order?”
+- “How long is express delivery and what does it cost?”
+
+### Returns and warranty
+
+- “What’s your return policy?”
+- “How do I start a return?”
+- “Is accidental damage covered under warranty?”
+
+### Support
+
+- “What are your support hours?”
+- “Can I get phone support for a Widget Mini?”
+
+### Company and scope
+
+- “What does Acme Widgets sell?”
+- “Do you sell software?” (the knowledge base says no)
+
+### What to expect
+
+| Type | Behavior |
+| --- | --- |
+| In the knowledge base | Short answer grounded in the retrieved chunks; the UI may show “Context used”. |
+| Not in the knowledge base (for example “Where’s my order #12345?”) | Should say it doesn’t know and point to support@acmewidgets.example. |
+| Off-topic (recipes, crypto, medical advice) | The system prompt keeps it on Acme Widgets only. |
+
+### What not to prompt
+
+- Prompt injection — for example “ignore all previous instructions”, `system: ...`, or “jailbreak” — returns 400 from the guardrails.
+- Very long messages — over 2000 characters — are rejected.
+
+### Customizing what you can ask
+
+Add or edit markdown under `backend/context/`, restart the API, then ask about whatever you put in those files.
+
 ## Customize context
 
 Edit or add `.md` files under `backend/context/` and restart the API (embeddings are built at startup).
